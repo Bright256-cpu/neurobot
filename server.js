@@ -1,3 +1,4 @@
+
 import http from "http";
 import { USER_PROFILE } from "./profile.js";
 
@@ -16,436 +17,555 @@ const PROFILE_FOR_AI = {
 };
 
 // ==========================================
-// 2. NEURO'S BRAIN AND INSTRUCTIONS
+// 2. NEURO'S SYSTEM INSTRUCTIONS
 // ==========================================
 
 const SYSTEM_PROMPT = `
-You are Neuro, a long-term personal AI assistant.
+You are Neuro, Bright's personal AI assistant.
 
-You are helping the user using this personal profile:
+USER PROFILE:
 ${JSON.stringify(PROFILE_FOR_AI, null, 2)}
 
-YOUR MAIN RESPONSIBILITIES:
+YOUR RESPONSIBILITIES:
 
 EDUCATION:
-- Support the user through Senior Three and Senior Four.
-- Prepare the user for Senior Five and Senior Six.
-- Teach Mathematics, English, Biology, Physics, Chemistry,
-  Geography, History and Political Education, and Entrepreneurship.
-- Explain difficult subjects in simple steps.
-- Help with assignments, revision and examinations.
-- Create realistic study plans and timetables.
+- Help Bright with Senior Three and Senior Four.
+- Teach all his listed school subjects.
+- Explain difficult concepts step by step.
+- Prepare revision notes, quizzes and study plans.
+- Support his academic progress.
 
 A-LEVEL:
-- The user's A-Level combination has not yet been selected.
-- Ask the user about the combination after Senior Four.
-- Never guess or choose the combination for the user.
-- Adapt future lessons to the confirmed combination.
+- Never guess Bright's A-Level combination.
+- Ask him after Senior Four.
+- Adapt lessons to his confirmed combination.
 
 UNIVERSITY:
-- The user's ambition is to study Information Technology
-  at Brigham Young University (BYU).
-- Help prepare for university admission.
-- Research scholarships and eligibility requirements.
-- Verify current university information before giving advice.
-- The user hopes to pursue BYU studies alongside Senior Five
-  and Senior Six. Treat this as a plan, not confirmed enrollment.
-- Help identify admission, timetable and workload challenges.
+- Help Bright prepare for Brigham Young University (BYU).
+- His intended course is Information Technology.
+- Research admission requirements and scholarships.
+- Verify current information before making claims.
+- His plan to study alongside A-Level is not confirmed enrollment.
 
 TECHNOLOGY:
 - Teach JavaScript, Node.js and programming.
-- Help with web development and software projects.
-- Explain errors and help debug code.
-- Support the development of Neuro itself.
-- Introduce artificial intelligence and computer science concepts.
+- Help build websites and software.
+- Explain errors and debugging.
+- Teach artificial intelligence and computer science.
+- Help develop Neuro.
 
 RESEARCH:
-- Help investigate academic and practical topics.
-- Use reliable sources when research tools are available.
-- Provide accurate references.
+- Use reliable sources when available.
 - Never invent facts or citations.
-- Clearly distinguish facts from assumptions.
+- Separate verified facts from assumptions.
 
 PRODUCTIVITY:
-- Help organise assignments, projects and deadlines.
-- Create schedules and reminders when supported.
-- Help prepare documents and academic reports.
-- Track progress when persistent storage is available.
+- Help manage assignments and deadlines.
+- Create study schedules.
+- Help prepare academic documents.
+- Track progress when storage is available.
 
-PRIVACY AND APPROVAL:
-- Never request passwords, API keys or verification codes.
-- Protect the user's personal information.
-- Never send emails without explicit approval.
-- Never submit assignments without explicit approval.
-- Never claim to have completed an action that you have not performed.
+PRIVACY:
+- Never request passwords or API keys.
+- Never expose private information.
+- Never send emails without permission.
+- Never submit assignments without permission.
 
 COMMUNICATION:
-- Use clear, understandable English.
-- Give practical, step-by-step instructions.
-- Avoid unnecessary repetition.
-- Adapt explanations to the user's current education level.
-- Be patient when teaching technical subjects.
+- Use clear English.
+- Be patient.
+- Give practical examples.
+- Explain things step by step.
+- Teach Bright at his current academic level.
 
 LONG-TERM PURPOSE:
-Grow alongside the user from secondary school through
-university and professional development.
+Help Bright grow through secondary school, university
+and professional development.
 
-You are Neuro. Help the user learn, build, research,
-organise and achieve long-term goals.
+You are Neuro. Help Bright learn, build, research,
+organise and achieve his goals.
 `;
 
 // ==========================================
-// 3. CONVERSATION HISTORY
+// 3. CONVERSATION MEMORY
 // ==========================================
 
 const history = [];
 
 // ==========================================
-// 4. CONNECT NEURO TO GEMINI AI
+// 4. GEMINI CONNECTION
 // ==========================================
 
 async function askGemini(message) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("Gemini API key is not configured.");
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(
+      "GEMINI_API_KEY is missing from Render Environment."
+    );
   }
 
-  history.push({
-    role: "user",
-    parts: [{ text: message }]
-  });
+  const conversation = [
+    ...history.slice(-14),
+    {
+      role: "user",
+      parts: [{ text: message }]
+    }
+  ];
+
+  let response;
 
   try {
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-        process.env.GEMINI_API_KEY,
+    response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
         },
         body: JSON.stringify({
           systemInstruction: {
             parts: [{ text: SYSTEM_PROMPT }]
           },
-          contents: history.slice(-16),
+          contents: conversation,
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 1000
+            maxOutputTokens: 1200
           }
         })
       }
     );
+  } catch (error) {
+    throw new Error(
+      "Could not connect to Google: " + error.message
+    );
+  }
 
-    if (!response.ok) {
-      const errorBody = await response.text();
+  const rawResponse = await response.text();
 
-      console.error("Google RESPONSE:", errorBody);
+  let data;
 
-      throw new Error(
-        "Gemini request failed (" +
-        response.status +
-        "): " +
-        errorBody
-      );
-    }
+  try {
+    data = JSON.parse(rawResponse);
+  } catch {
+    throw new Error(
+      "Google returned an invalid response: " +
+      rawResponse.slice(0, 500)
+    );
+  }
 
-    const data = await response.json();
+  // SHOW GOOGLE'S ACTUAL ERROR
 
-    const reply = data.candidates?.[0]?.content?.parts
-      ?.map(part => part.text || "")
-      .join("")
-      .trim();
+  if (!response.ok) {
+    const googleMessage =
+      data.error?.message || "Unknown Google API error";
 
-    if (!reply) {
-      throw new Error("Gemini returned an empty response.");
-    }
+    const googleStatus =
+      data.error?.status || "UNKNOWN";
 
-    history.push({
-      role: "model",
-      parts: [{ text: reply }]
+    console.error("GOOGLE API ERROR:", {
+      httpStatus: response.status,
+      status: googleStatus,
+      message: googleMessage
     });
 
-    return reply;
-
-  } catch (error) {
-    history.pop();
-    throw error;
+    throw new Error(
+      `Google API ${response.status} (${googleStatus}): ${googleMessage}`
+    );
   }
+
+  // CHECK THE AI RESPONSE
+
+  const candidate = data.candidates?.[0];
+
+  if (!candidate) {
+    throw new Error(
+      "Google returned no AI response. Check the API response."
+    );
+  }
+
+  const reply = candidate.content?.parts
+    ?.map(part => part.text || "")
+    .join("")
+    .trim();
+
+  if (!reply) {
+    throw new Error(
+      "Google returned no text. Finish reason: " +
+      (candidate.finishReason || "Unknown")
+    );
+  }
+
+  // SAVE SUCCESSFUL CONVERSATION
+
+  history.push(
+    { role: "user", parts: [{ text: message }] },
+    { role: "model", parts: [{ text: reply }] }
+  );
+
+  while (history.length > 20) {
+    history.shift();
+  }
+
+  return reply;
 }
 
 // ==========================================
-// 5. NEURO'S CHAT INTERFACE
+// 5. NEURO'S WEB INTERFACE
 // ==========================================
 
 const PAGE = `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Neuro AI Assistant</title>
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      font-family: Arial, sans-serif;
-      background: #0f1115;
-      color: #eee;
-      margin: 0;
-    }
-    #app {
-      max-width: 750px;
-      margin: 0 auto;
-      padding: 18px;
-    }
-    h1 {
-      margin: 8px 0;
-      color: #a5b4fc;
-    }
-    .subtitle {
-      color: #999;
-      font-size: 14px;
-    }
-    #buttons {
-      margin-top: 18px;
-    }
-    #buttons button {
-      margin: 4px 4px 4px 0;
-    }
-    #chat {
-      height: 55vh;
-      overflow-y: auto;
-      background: #181b22;
-      border-radius: 10px;
-      padding: 14px;
-      margin: 16px 0;
-    }
-    .me {
-      color: #7dd3fc;
-      margin: 12px 0;
-      white-space: pre-wrap;
-    }
-    .bot {
-      color: #eee;
-      margin: 12px 0;
-      white-space: pre-wrap;
-      line-height: 1.5;
-    }
-    #row {
-      display: flex;
-      gap: 8px;
-    }
-    #msg {
-      flex: 1;
-      min-width: 0;
-      padding: 12px;
-      border-radius: 7px;
-      border: none;
-      background: #fff;
-      color: #111;
-    }
-    button {
-      padding: 11px 15px;
-      border-radius: 7px;
-      border: none;
-      background: #4f46e5;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #6366f1;
-    }
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    footer {
-      color: #777;
-      font-size: 12px;
-      text-align: center;
-      margin-top: 20px;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neuro AI Assistant</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0f1115;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+#app {
+  max-width: 750px;
+  margin: auto;
+  padding: 18px;
+}
+
+h1 {
+  color: #a5b4fc;
+}
+
+.subtitle {
+  color: #999;
+}
+
+#buttons {
+  margin: 20px 0;
+}
+
+button {
+  background: #4f46e5;
+  color: white;
+  border: none;
+  padding: 12px 16px;
+  margin: 4px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #6366f1;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+#chat {
+  height: 55vh;
+  overflow-y: auto;
+  background: #181b22;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+.me {
+  color: #7dd3fc;
+  margin: 14px 0;
+  white-space: pre-wrap;
+}
+
+.bot {
+  color: white;
+  margin: 14px 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.error {
+  color: #fca5a5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#row {
+  display: flex;
+  gap: 8px;
+}
+
+#msg {
+  flex: 1;
+  min-width: 0;
+  padding: 13px;
+  border-radius: 7px;
+  border: none;
+}
+
+footer {
+  text-align: center;
+  color: #777;
+  margin-top: 25px;
+  font-size: 12px;
+}
+</style>
 </head>
+
 <body>
-  <div id="app">
-    <h1>Neuro</h1>
-    <div class="subtitle">
-      Your personal AI assistant
-    </div>
-    <div id="buttons">
-      <button onclick="quick('Make me a study plan for this week across all my subjects.')">
-        Study plan
-      </button>
-      <button onclick="quick('Give me safe ways to learn skills and earn money with computers in Uganda.')">
-        Opportunities
-      </button>
-      <button onclick="quick('What should I do today?')">
-        What should I do today?
-      </button>
-    </div>
-    <div id="chat">
-      <div class="bot">
-        Neuro: Hello! I'm Neuro. What would you like us to work on today?
-      </div>
-    </div>
-    <div id="row">
-      <input
-        id="msg"
-        type="text"
-        placeholder="Ask Neuro anything..."
-        onkeydown="if(event.key === 'Enter') send()"
-      >
-      <button id="sendBtn" onclick="send()">
-        Send
-      </button>
-    </div>
-    <footer>
-      Neuro AI Assistant
-    </footer>
-  </div>
-  <script>
-    const chat = document.getElementById("chat");
-    const input = document.getElementById("msg");
-    const sendBtn = document.getElementById("sendBtn");
 
-    function add(cls, text) {
-      const div = document.createElement("div");
-      div.className = cls;
-      div.textContent = text;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-      return div;
+<div id="app">
+
+<h1>Neuro</h1>
+
+<div class="subtitle">
+Your personal AI assistant
+</div>
+
+<div id="buttons">
+
+<button onclick="quick('Make me a study plan for this week.')">
+Study plan
+</button>
+
+<button onclick="quick('Give me safe technology opportunities in Uganda.')">
+Opportunities
+</button>
+
+<button onclick="quick('What should I do today?')">
+What should I do today?
+</button>
+
+</div>
+
+<div id="chat">
+<div class="bot">
+Neuro: Hello Bright! I'm ready to help you learn, build and achieve your goals.
+</div>
+</div>
+
+<div id="row">
+
+<input
+id="msg"
+type="text"
+placeholder="Ask Neuro anything..."
+onkeydown="if(event.key === 'Enter') send()"
+>
+
+<button id="sendBtn" onclick="send()">
+Send
+</button>
+
+</div>
+
+<footer>
+Neuro AI Assistant
+</footer>
+
+</div>
+
+<script>
+
+const chat = document.getElementById("chat");
+const input = document.getElementById("msg");
+const sendBtn = document.getElementById("sendBtn");
+
+function add(cls, text) {
+  const div = document.createElement("div");
+  div.className = cls;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+async function ask(text) {
+
+  add("me", "You: " + text);
+
+  const waiting = add("bot", "Neuro: Thinking...");
+
+  sendBtn.disabled = true;
+
+  try {
+
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: text
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Request failed");
     }
 
-    async function ask(text) {
-      add("me", "You: " + text);
-      const waiting = add("bot", "Neuro: Thinking...");
-      sendBtn.disabled = true;
+    waiting.textContent = "Neuro: " + data.reply;
 
-      try {
-        const res = await fetch("/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            message: text
-          })
-        });
+  } catch (error) {
 
-        const data = await res.json();
+    waiting.className = "error";
 
-        if (!res.ok) {
-          throw new Error(data.error || "Request failed");
-        }
+    waiting.textContent =
+      "Neuro error: " + error.message;
 
-        waiting.textContent = "Neuro: " + data.reply;
+    console.error(error);
 
-      } catch (error) {
-        waiting.textContent =
-          "Neuro: Sorry, something went wrong. Please try again.";
-        console.error(error);
+  } finally {
 
-      } finally {
-        sendBtn.disabled = false;
-        input.focus();
-      }
-    }
+    sendBtn.disabled = false;
+    input.focus();
 
-    function send() {
-      const text = input.value.trim();
-      if (!text) return;
-      input.value = "";
-      ask(text);
-    }
+  }
+}
 
-    function quick(text) {
-      ask(text);
-    }
-  </script>
+function send() {
+  const text = input.value.trim();
+
+  if (!text || sendBtn.disabled) return;
+
+  input.value = "";
+  ask(text);
+}
+
+function quick(text) {
+  if (!sendBtn.disabled) ask(text);
+}
+
+</script>
+
 </body>
 </html>`;
 
 // ==========================================
-// 6. CREATE NEURO'S SERVER
+// 6. CREATE SERVER
 // ==========================================
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer((req, res) => {
+
   if (req.method === "GET" && req.url === "/health") {
+
     res.writeHead(200, {
       "Content-Type": "application/json"
     });
+
     res.end(JSON.stringify({
       status: "online",
       assistant: "Neuro"
     }));
+
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/") {
+
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8"
+    });
+
+    res.end(PAGE);
+
     return;
   }
 
   if (req.method === "POST" && req.url === "/chat") {
+
     let body = "";
+    let tooLarge = false;
 
     req.on("data", chunk => {
+
       body += chunk;
+
       if (body.length > 10000) {
-        req.destroy();
+        tooLarge = true;
       }
+
     });
 
     req.on("end", async () => {
+
       res.setHeader(
         "Content-Type",
         "application/json"
       );
 
+      if (tooLarge) {
+
+        res.writeHead(413);
+
+        res.end(JSON.stringify({
+          error: "Message is too large."
+        }));
+
+        return;
+      }
+
       try {
+
         const { message } = JSON.parse(body || "{}");
 
         if (
           typeof message !== "string" ||
           !message.trim()
         ) {
+
           res.writeHead(400);
+
           res.end(JSON.stringify({
             error: "Please enter a valid message."
           }));
+
           return;
         }
 
         const reply = await askGemini(message.trim());
 
         res.writeHead(200);
+
         res.end(JSON.stringify({
           reply
         }));
 
       } catch (error) {
-        console.error("Neuro error:", error.message);
+
+        console.error("NEURO ERROR:", error.message);
+
         res.writeHead(500);
+
         res.end(JSON.stringify({
-          error: "Neuro could not process your request. Please try again."
+          error: error.message
         }));
+
       }
+
     });
 
-    return;
-  }
-
-  if (req.method === "GET" && req.url === "/") {
-    res.writeHead(200, {
-      "Content-Type": "text/html; charset=utf-8"
-    });
-    res.end(PAGE);
     return;
   }
 
   res.writeHead(404, {
     "Content-Type": "application/json"
   });
+
   res.end(JSON.stringify({
     error: "Page not found."
   }));
+
 });
 
 // ==========================================
