@@ -6,8 +6,6 @@ import { USER_PROFILE } from "./profile.js";
 // 1. NEURO'S PERSONAL PROFILE
 // ==========================================
 
-// Exclude the exact date of birth from the profile
-// sent to the AI provider.
 const {
   dateOfBirth,
   ...safeIdentity
@@ -103,8 +101,6 @@ organise and achieve long-term goals.
 // 3. CONVERSATION HISTORY
 // ==========================================
 
-// Temporary history for this prototype.
-// We will add private, persistent memory later.
 const history = [];
 
 // ==========================================
@@ -112,8 +108,10 @@ const history = [];
 // ==========================================
 
 async function askGemini(message) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("Gemini API key is not configured.");
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("Gemini API key is not configured in Render.");
   }
 
   history.push({
@@ -124,7 +122,7 @@ async function askGemini(message) {
   try {
     const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-        process.env.GEMINI_API_KEY,
+        apiKey,
       {
         method: "POST",
         headers: {
@@ -134,9 +132,7 @@ async function askGemini(message) {
           systemInstruction: {
             parts: [{ text: SYSTEM_PROMPT }]
           },
-
           contents: history.slice(-16),
-
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 1000
@@ -145,11 +141,38 @@ async function askGemini(message) {
       }
     );
 
+    const responseText = await response.text();
+
     if (!response.ok) {
-      throw new Error("Gemini request failed with status " + response.status);
+      console.error("========== GEMINI API ERROR ==========");
+      console.error("HTTP STATUS:", response.status);
+      console.error("GOOGLE RESPONSE:", responseText);
+      console.error("======================================");
+
+      let errorMessage = responseText;
+
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.error?.message || responseText;
+      } catch {
+        // Keep the original response.
+      }
+
+      throw new Error(
+        "Gemini request failed (" +
+        response.status +
+        "): " +
+        errorMessage
+      );
     }
 
-    const data = await response.json();
+    let data;
+
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      throw new Error("Gemini returned invalid JSON.");
+    }
 
     const reply = data.candidates?.[0]?.content?.parts
       ?.map(part => part.text || "")
@@ -157,6 +180,7 @@ async function askGemini(message) {
       .trim();
 
     if (!reply) {
+      console.error("Gemini returned no text:", JSON.stringify(data));
       throw new Error("Gemini returned an empty response.");
     }
 
@@ -169,6 +193,7 @@ async function askGemini(message) {
 
   } catch (error) {
     history.pop();
+    console.error("Neuro Gemini error:", error.message);
     throw error;
   }
 }
@@ -182,7 +207,6 @@ const PAGE = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
   <title>Neuro AI Assistant</title>
 
   <style>
@@ -340,7 +364,6 @@ const PAGE = `<!DOCTYPE html>
 
     function add(cls, text) {
       const div = document.createElement("div");
-
       div.className = cls;
       div.textContent = text;
 
@@ -354,7 +377,6 @@ const PAGE = `<!DOCTYPE html>
       add("me", "You: " + text);
 
       const waiting = add("bot", "Neuro: Thinking...");
-
       sendBtn.disabled = true;
 
       try {
@@ -378,7 +400,7 @@ const PAGE = `<!DOCTYPE html>
 
       } catch (error) {
         waiting.textContent =
-          "Neuro: Sorry, something went wrong. Please try again.";
+          "Neuro: Sorry, something went wrong. Please check the server logs.";
 
         console.error(error);
 
@@ -425,7 +447,6 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && req.url === "/chat") {
-
     let body = "";
 
     req.on("data", chunk => {
@@ -437,11 +458,7 @@ const server = http.createServer(async (req, res) => {
     });
 
     req.on("end", async () => {
-
-      res.setHeader(
-        "Content-Type",
-        "application/json"
-      );
+      res.setHeader("Content-Type", "application/json");
 
       try {
         const { message } = JSON.parse(body || "{}");
