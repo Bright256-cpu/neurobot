@@ -1,4 +1,3 @@
-
 import http from "http";
 import { USER_PROFILE } from "./profile.js";
 
@@ -6,8 +5,6 @@ import { USER_PROFILE } from "./profile.js";
 // 1. NEURO'S PERSONAL PROFILE
 // ==========================================
 
-// Exclude the exact date of birth from the profile
-// sent to the AI provider.
 const {
   dateOfBirth,
   ...safeIdentity
@@ -26,7 +23,6 @@ const SYSTEM_PROMPT = `
 You are Neuro, a long-term personal AI assistant.
 
 You are helping the user using this personal profile:
-
 ${JSON.stringify(PROFILE_FOR_AI, null, 2)}
 
 YOUR MAIN RESPONSIBILITIES:
@@ -91,7 +87,6 @@ COMMUNICATION:
 - Be patient when teaching technical subjects.
 
 LONG-TERM PURPOSE:
-
 Grow alongside the user from secondary school through
 university and professional development.
 
@@ -103,8 +98,6 @@ organise and achieve long-term goals.
 // 3. CONVERSATION HISTORY
 // ==========================================
 
-// Temporary history for this prototype.
-// We will add private, persistent memory later.
 const history = [];
 
 // ==========================================
@@ -134,9 +127,7 @@ async function askGemini(message) {
           systemInstruction: {
             parts: [{ text: SYSTEM_PROMPT }]
           },
-
           contents: history.slice(-16),
-
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 1000
@@ -146,7 +137,16 @@ async function askGemini(message) {
     );
 
     if (!response.ok) {
-      throw new Error("Gemini request failed with status " + response.status);
+      const errorBody = await response.text();
+
+      console.error("Google RESPONSE:", errorBody);
+
+      throw new Error(
+        "Gemini request failed (" +
+        response.status +
+        "): " +
+        errorBody
+      );
     }
 
     const data = await response.json();
@@ -182,45 +182,36 @@ const PAGE = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
   <title>Neuro AI Assistant</title>
-
   <style>
     * {
       box-sizing: border-box;
     }
-
     body {
       font-family: Arial, sans-serif;
       background: #0f1115;
       color: #eee;
       margin: 0;
     }
-
     #app {
       max-width: 750px;
       margin: 0 auto;
       padding: 18px;
     }
-
     h1 {
       margin: 8px 0;
       color: #a5b4fc;
     }
-
     .subtitle {
       color: #999;
       font-size: 14px;
     }
-
     #buttons {
       margin-top: 18px;
     }
-
     #buttons button {
       margin: 4px 4px 4px 0;
     }
-
     #chat {
       height: 55vh;
       overflow-y: auto;
@@ -229,25 +220,21 @@ const PAGE = `<!DOCTYPE html>
       padding: 14px;
       margin: 16px 0;
     }
-
     .me {
       color: #7dd3fc;
       margin: 12px 0;
       white-space: pre-wrap;
     }
-
     .bot {
       color: #eee;
       margin: 12px 0;
       white-space: pre-wrap;
       line-height: 1.5;
     }
-
     #row {
       display: flex;
       gap: 8px;
     }
-
     #msg {
       flex: 1;
       min-width: 0;
@@ -257,7 +244,6 @@ const PAGE = `<!DOCTYPE html>
       background: #fff;
       color: #111;
     }
-
     button {
       padding: 11px 15px;
       border-radius: 7px;
@@ -266,16 +252,13 @@ const PAGE = `<!DOCTYPE html>
       color: white;
       cursor: pointer;
     }
-
     button:hover {
       background: #6366f1;
     }
-
     button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
-
     footer {
       color: #777;
       font-size: 12px;
@@ -284,36 +267,28 @@ const PAGE = `<!DOCTYPE html>
     }
   </style>
 </head>
-
 <body>
   <div id="app">
-
     <h1>Neuro</h1>
-
     <div class="subtitle">
       Your personal AI assistant
     </div>
-
     <div id="buttons">
       <button onclick="quick('Make me a study plan for this week across all my subjects.')">
         Study plan
       </button>
-
       <button onclick="quick('Give me safe ways to learn skills and earn money with computers in Uganda.')">
         Opportunities
       </button>
-
       <button onclick="quick('What should I do today?')">
         What should I do today?
       </button>
     </div>
-
     <div id="chat">
       <div class="bot">
         Neuro: Hello! I'm Neuro. What would you like us to work on today?
       </div>
     </div>
-
     <div id="row">
       <input
         id="msg"
@@ -321,18 +296,14 @@ const PAGE = `<!DOCTYPE html>
         placeholder="Ask Neuro anything..."
         onkeydown="if(event.key === 'Enter') send()"
       >
-
       <button id="sendBtn" onclick="send()">
         Send
       </button>
     </div>
-
     <footer>
       Neuro AI Assistant
     </footer>
-
   </div>
-
   <script>
     const chat = document.getElementById("chat");
     const input = document.getElementById("msg");
@@ -340,21 +311,16 @@ const PAGE = `<!DOCTYPE html>
 
     function add(cls, text) {
       const div = document.createElement("div");
-
       div.className = cls;
       div.textContent = text;
-
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
-
       return div;
     }
 
     async function ask(text) {
       add("me", "You: " + text);
-
       const waiting = add("bot", "Neuro: Thinking...");
-
       sendBtn.disabled = true;
 
       try {
@@ -379,7 +345,6 @@ const PAGE = `<!DOCTYPE html>
       } catch (error) {
         waiting.textContent =
           "Neuro: Sorry, something went wrong. Please try again.";
-
         console.error(error);
 
       } finally {
@@ -390,9 +355,7 @@ const PAGE = `<!DOCTYPE html>
 
     function send() {
       const text = input.value.trim();
-
       if (!text) return;
-
       input.value = "";
       ask(text);
     }
@@ -401,7 +364,6 @@ const PAGE = `<!DOCTYPE html>
       ask(text);
     }
   </script>
-
 </body>
 </html>`;
 
@@ -410,34 +372,28 @@ const PAGE = `<!DOCTYPE html>
 // ==========================================
 
 const server = http.createServer(async (req, res) => {
-
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, {
       "Content-Type": "application/json"
     });
-
     res.end(JSON.stringify({
       status: "online",
       assistant: "Neuro"
     }));
-
     return;
   }
 
   if (req.method === "POST" && req.url === "/chat") {
-
     let body = "";
 
     req.on("data", chunk => {
       body += chunk;
-
       if (body.length > 10000) {
         req.destroy();
       }
     });
 
     req.on("end", async () => {
-
       res.setHeader(
         "Content-Type",
         "application/json"
@@ -451,27 +407,22 @@ const server = http.createServer(async (req, res) => {
           !message.trim()
         ) {
           res.writeHead(400);
-
           res.end(JSON.stringify({
             error: "Please enter a valid message."
           }));
-
           return;
         }
 
         const reply = await askGemini(message.trim());
 
         res.writeHead(200);
-
         res.end(JSON.stringify({
           reply
         }));
 
       } catch (error) {
         console.error("Neuro error:", error.message);
-
         res.writeHead(500);
-
         res.end(JSON.stringify({
           error: "Neuro could not process your request. Please try again."
         }));
@@ -485,7 +436,6 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8"
     });
-
     res.end(PAGE);
     return;
   }
@@ -493,7 +443,6 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404, {
     "Content-Type": "application/json"
   });
-
   res.end(JSON.stringify({
     error: "Page not found."
   }));
