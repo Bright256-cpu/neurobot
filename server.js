@@ -97,11 +97,14 @@ const history = [];
 // ==========================================
 
 async function askGemini(message) {
-  const apiKey = process.env.GEMINI_API_KEY;
+
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY;
 
   if (!apiKey) {
     throw new Error(
-      "GEMINI_API_KEY is missing from Render Environment."
+      "Missing API key. Add GEMINI_API_KEY or GOOGLE_API_KEY in Render Environment."
     );
   }
 
@@ -116,13 +119,14 @@ async function askGemini(message) {
   let response;
 
   try {
+
     response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-goog-api-key": apiKey
+          "x-goog-api-key": apiKey.trim()
         },
         body: JSON.stringify({
           systemInstruction: {
@@ -136,10 +140,13 @@ async function askGemini(message) {
         })
       }
     );
+
   } catch (error) {
+
     throw new Error(
-      "Could not connect to Google: " + error.message
+      "Could not connect to Gemini: " + error.message
     );
+
   }
 
   const rawResponse = await response.text();
@@ -147,24 +154,27 @@ async function askGemini(message) {
   let data;
 
   try {
+
     data = JSON.parse(rawResponse);
+
   } catch {
+
     throw new Error(
       "Google returned an invalid response: " +
       rawResponse.slice(0, 500)
     );
+
   }
 
-  // SHOW GOOGLE'S ACTUAL ERROR
-
   if (!response.ok) {
+
     const googleMessage =
       data.error?.message || "Unknown Google API error";
 
     const googleStatus =
       data.error?.status || "UNKNOWN";
 
-    console.error("GOOGLE API ERROR:", {
+    console.error("GEMINI API ERROR:", {
       httpStatus: response.status,
       status: googleStatus,
       message: googleMessage
@@ -173,16 +183,17 @@ async function askGemini(message) {
     throw new Error(
       `Google API ${response.status} (${googleStatus}): ${googleMessage}`
     );
-  }
 
-  // CHECK THE AI RESPONSE
+  }
 
   const candidate = data.candidates?.[0];
 
   if (!candidate) {
+
     throw new Error(
-      "Google returned no AI response. Check the API response."
+      "Gemini returned no AI response."
     );
+
   }
 
   const reply = candidate.content?.parts
@@ -191,13 +202,13 @@ async function askGemini(message) {
     .trim();
 
   if (!reply) {
+
     throw new Error(
-      "Google returned no text. Finish reason: " +
+      "Gemini returned no text. Finish reason: " +
       (candidate.finishReason || "Unknown")
     );
-  }
 
-  // SAVE SUCCESSFUL CONVERSATION
+  }
 
   history.push(
     { role: "user", parts: [{ text: message }] },
